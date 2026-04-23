@@ -30,6 +30,4 @@ The project will focus on cleaning and analyzing calcium data, then creating vis
 # Repo Setup and Maintenance Plan
 Keep all code in hw4-3.qmd
 
-Store data in a data/ folder
-
 Use GitHub commits to track changes.
