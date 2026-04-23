@@ -1,0 +1,277 @@
+---
+title: "STAT 184 HW 4.3 Reproducible Data Analysis"
+author: "Nihal"
+date: "April 14, 2026"
+format: pdf
+editor: visual
+---
+
+Busiest Airports Analysis
+
+I brought back my HW 3.4 work on the six busiest U.S. airports and improved it with the latest 2024 FAA numbers.
+
+Narrative: @tbl-airports lists the top six airports by enplanements. Atlanta is still far ahead, and the bar plot in @fig-airports makes the ranking easy to see because I flipped the bars. Compared to my HW 3.4 submission, the table now has cleaner column names and the plot uses a better color and theme. It was interesting to notice LAX actually dropped a little while the others grew.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| label: tbl-airports
+#| tbl-cap: "Six Busiest U.S. Airports by 2024 Enplanements (FAA data)"
+
+library(tidyverse)
+library(knitr)
+
+airports <- tibble(
+  Rank = 1:6,
+  Airport = c("Hartsfield-Jackson Atlanta (ATL)", "Dallas/Fort Worth (DFW)", "Denver (DEN)", "Chicago O'Hare (ORD)", "Los Angeles (LAX)", "New York JFK (JFK)"),
+  Enplanements = c(52511402, 42351316, 40012895, 38575693, 37760834, 31466102)
+)
+
+kable(airports, format = "pipe", digits = 0)
+```
+
+```{r}
+#| echo: false
+#| fig-cap: "2024 Passenger Enplanements at the Six Busiest U.S. Airports"
+#| label: fig-airports
+#| fig-width: 8
+#| fig-height: 5
+
+ggplot(airports, aes(x = reorder(Airport, Enplanements), y = Enplanements/1e6)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(x = NULL, y = "Enplanements (millions)") +
+  theme_minimal(base_size = 12)
+```
+
+## Monte Carlo Numerical Integration
+
+Narrative: Monte Carlo integration throws random points into a box and sees how many of them land under the curve. \@fig-monte shows four small multiples with more and more points. You can literally watch the estimate get tighter as the sample size grows. With 10,000 points the estimate is almost always within 0.02 of the true value.
+
+```{r}
+#| echo: false 
+#| fig-cap: "Monte Carlo Integration Small Multiples – Convergence with Increasing Sample Size" 
+#| label: fig-monte
+#| fig-width: 10
+#| fig-height: 6
+
+set.seed(184)
+true_value <- 2/3
+n_values <- c(100, 500, 1000, 10000)
+
+plot_data <- map_dfr(n_values, function(n) {
+  x <- runif(n)
+  y <- runif(n)
+  under <- y <= 4 * x * (1 - x)
+  estimate <- mean(under) * 4
+  tibble(n = n, x = x, y = y, under = under, estimate = estimate)
+})
+
+ggplot(plot_data, aes(x = x, y = y, color = under)) +
+  geom_point(size = 0.8, alpha = 0.6) +
+  stat_function(fun = function(x) 4*x*(1-x), color = "red", linewidth = 1) +
+  facet_wrap(~ n, ncol = 2) +
+  labs(x = "x", y = "y", color = "Under curve") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom")
+```
+
+**Answers to the original HW 3.4 questions:**
+
+1.  The exact answer to the integral is 2/3.
+
+2.  The small-multiples plot shows the estimate stabilizes around the true value as sample size increases.
+
+3.  The visualization helps someone else see the same pattern I saw. more points = better approximation.
+
+### Plan for Data Wrangling and Visualization
+
+For this section, my goal was to explore how ulna calcium levels change over time and compare the two groups (null vs. diet/exercise). I wanted to create a visualization that clearly shows trends across the four time points (Initial, Year 1, Year 2, Year 3).
+
+**Steps I planned to take:**
+
+-   Load the calcium dataset without modifying any values
+
+-   Reshape the data from wide format to long format so each row represents one measurement per year
+
+-   Create a variable identifying the treatment group (null vs. diet/exercise)
+
+-   Calculate summary statistics (mean calcium levels) for each group over time
+
+-   Create a line plot showing calcium levels across years for both groups
+
+-   Add clear labels and legend so someone else can easily interpret the results
+
+### Plan Informed Prompt (Used with ChatGPT)
+
+I uploaded the calcium.csv file and used the following prompt:
+
+**Prompt:**\
+“Using this dataset of calcium measurements over time, help me clean and reshape the data so that I can compare the two treatment groups across years. Then create a line plot showing how calcium levels change over time for each group. Make sure the data is in long format and clearly labeled.”
+
+### Results from Plan-Informed Prompt
+
+ChatGPT suggested reshaping the data into long format and creating a grouped line plot. The visualization showed both groups over time, making it easy to compare trends.
+
+**Figure X: Calcium Levels Over Time by Treatment Group (Planed Informed Prompt)**
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-cap: "Calcium Levels Over Time by Treatment Group (Plan-Informed Prompt)"
+
+library(tidyverse)
+
+calcium <- read.csv("calcium.csv")
+
+null_long <- calcium %>%
+  select(y0, y1, y2, y3) %>%
+  rename(
+    Initial = y0,
+    `Year 1` = y1,
+    `Year 2` = y2,
+    `Year 3` = y3
+  ) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "Year",
+    values_to = "Calcium"
+  ) %>%
+  mutate(Group = "Null")
+
+diet_long <- calcium %>%
+  select(`y0.1`, `y1.1`, `y2.1`, `y3.1`) %>%
+  rename(
+    Initial = `y0.1`,
+    `Year 1` = `y1.1`,
+    `Year 2` = `y2.1`,
+    `Year 3` = `y3.1`
+  ) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "Year",
+    values_to = "Calcium"
+  ) %>%
+  mutate(Group = "Diet/Exercise")
+
+calcium_long <- bind_rows(null_long, diet_long)
+
+ggplot(calcium_long, aes(x = Year, y = Calcium, color = Group, group = Group)) +
+  stat_summary(fun = mean, geom = "line", linewidth = 1) +
+  stat_summary(fun = mean, geom = "point", size = 2) +
+  labs(x = "Year", y = "Ulna Calcium", color = "Treatment Group") +
+  theme_minimal()
+```
+
+**Narrative:**\
+The plot shows that both groups start at similar calcium levels, but over time the diet/exercise group maintains higher levels compared to the null group. The trend is easier to see because the data is organized by year and grouped clearly.
+
+### Generic Prompt (Same Tool)
+
+I then used a more general prompt without giving detailed instructions.
+
+**Prompt:**\
+“Make a graph using this dataset.”
+
+### Results from Generic Prompt
+
+ChatGPT created a basic visualization but did not clearly separate the treatment groups or organize the data in the best way.
+
+**Figure Y: Calcium Data Visualization (Generic Prompt)**
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-cap: "Calcium Data Visualization (Generic Prompt)"
+
+ggplot(calcium_long, aes(x = Year, y = Calcium)) +
+  geom_point(alpha = 0.5) +
+  labs(x = "Year", y = "Ulna Calcium") +
+  theme_minimal()
+```
+
+\
+
+**Narrative:**\
+The graph produced from the generic prompt was less clear. It did not properly distinguish between the two groups and made it harder to interpret changes over time.
+
+## Narrative Comparison
+
+The plan-informed prompt produced a much clearer and more useful visualization compared to the generic prompt. Because I gave specific instructions about reshaping the data and comparing groups over time, the resulting graph clearly showed trends in calcium levels for both groups. It was easy to see that the diet/exercise group maintained higher calcium levels over time.
+
+In contrast, the generic prompt produced a less structured graph. Without clear instructions, the tool did not organize the data properly, which made it harder to interpret. This shows that the quality of the output depends heavily on how detailed the prompt is.
+
+This process also showed me how important it is to understand the data before using a genAI tool. When I had a clear plan, the tool helped me execute it. When I didn’t, the results were less useful. Overall, the plan-informed approach was much more effective.
+
+------------------------------------------------------------------------
+
+# **Reflection**
+
+This semester has shown me how much easier data work is when everything is reproducible. In the beginning I was manually copying tables and plots into Word, now with Quarto I just write the code once and the PDF updates automatically. The busiest airports project taught me how much a good plot (like the flipped bar chart) can tell a story that numbers alone miss. The Monte Carlo section was the biggest “damn” moment. I never thought randomness could solve an integral I couldn’t do by hand. I also caught myself double checking my own code comments because I knew the professor would read the appendix. Overall I feel way more confident opening a new data set now.
+
+## GenAI Usage Appendix
+
+**Tool used:** ChatGPT\
+**Date of usage:** April 14, 2026\
+**Purpose:** I used ChatGPT to help structure the calcium data into long format and generate ideas for visualizing trends across treatment groups. I also used it to compare results between a detailed prompt and a generic prompt.
+
+**Prompt used (plan-informed):**\
+“Using this dataset of calcium measurements over time, help me clean and reshape the data so that I can compare the two treatment groups across years. Then create a line plot showing how calcium levels change over time for each group.”
+
+**Prompt used (generic):**\
+“Make a graph using this dataset.”
+
+**Response text generated:**\
+ChatGPT suggested reshaping the data and creating a grouped line plot. I used that idea and implemented it in my own code.
+
+```{r}
+#| echo: true
+#| code-fold: true
+#| code-summary: "Busiest Airports – Table & Plot Code"
+
+library(tidyverse)
+library(knitr)
+
+airports <- tibble(
+  Rank = 1:6,
+  Airport = c("Hartsfield-Jackson Atlanta (ATL)", "Dallas/Fort Worth (DFW)", "Denver (DEN)", "Chicago O'Hare (ORD)", "Los Angeles (LAX)", "New York JFK (JFK)"),
+  Enplanements = c(52511402, 42351316, 40012895, 38575693, 37760834, 31466102)
+)
+
+kable(airports, format = "pipe", digits = 0)
+
+ggplot(airports, aes(x = reorder(Airport, Enplanements), y = Enplanements/1e6)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(x = NULL, y = "Enplanements (millions)") +
+  theme_minimal(base_size = 12)
+```
+
+```{r}
+#| echo: true
+#| code-fold: true
+#| code-summary: "Monte Carlo Integration – Small Multiples Code"
+
+set.seed(184)
+true_value <- 2/3
+n_values <- c(100, 500, 1000, 10000)
+
+plot_data <- map_dfr(n_values, function(n) {
+  x <- runif(n)
+  y <- runif(n)
+  under <- y <= 4 * x * (1 - x)
+  estimate <- mean(under) * 4
+  tibble(n = n, x = x, y = y, under = under, estimate = estimate)
+})
+
+ggplot(plot_data, aes(x = x, y = y, color = under)) +
+  geom_point(size = 0.8, alpha = 0.6) +
+  stat_function(fun = function(x) 4*x*(1-x), color = "red", linewidth = 1) +
+  facet_wrap(~ n, ncol = 2) +
+  labs(x = "x", y = "y", color = "Under curve") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom")
+```
